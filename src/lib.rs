@@ -312,7 +312,7 @@ fn parse_param(
             quote! {
                 let param = arg_types[#idx];
                 match param.handle {
-                    crate::builtins_util::TypeHandle::Direct => match args.get(#idx) {
+                    crate::macro_types::TypeHandle::Direct => match args.get(#idx) {
                         None => {
                             return Err(crate::types::LispError::new(format!(
                                 "{} not given enough arguments, expected at least {} arguments, got {}.",
@@ -339,7 +339,7 @@ fn parse_param(
                 let param = arg_types[#idx];
                 let arg = args.get(#idx);
                 match param.handle {
-                    crate::builtins_util::TypeHandle::Optional => {
+                    crate::macro_types::TypeHandle::Optional => {
                         let #arg_name = arg.map(|x| x.to_owned());
                         #inner
                     },
@@ -357,7 +357,7 @@ fn parse_param(
                 let param = arg_types[#idx];
                 let arg = args.get(#idx);
                 match param.handle {
-                    crate::builtins_util::TypeHandle::VarArgs => {
+                    crate::macro_types::TypeHandle::VarArgs => {
                         let #arg_name = args[#idx..].iter().map(|x| x.clone()).collect::<Vec<crate::types::Expression>>();
                         #inner
                     },
@@ -491,7 +491,7 @@ fn make_orig_fn_call(
     let const_params_len = get_const_params_len_ident();
     Ok(quote! {
         match args.get(#const_params_len) {
-            Some(_) if #const_params_len == 0 || arg_types[#const_params_len - 1].handle != crate::builtins_util::TypeHandle::VarArgs => {
+            Some(_) if #const_params_len == 0 || arg_types[#const_params_len - 1].handle != crate::macro_types::TypeHandle::VarArgs => {
                 return Err(crate::types::LispError::new(format!(
                     "{} given too many arguments, expected at least {} arguments, got {}.",
                     fn_name,
@@ -576,9 +576,9 @@ fn parse_variadic_args_type(
             };
             Ok(quote! {{
                 #arg_check
-                use crate::builtins_util::TryIntoExpression;
+                use crate::macro_types::TryIntoExpression;
 
-                static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
+                static_assertions::assert_impl_all!(crate::types::Expression: crate::macro_types::TryIntoExpression<#wrapped_ty>);
                 let #arg_name = #arg_name
                     .iter()
                     .map(|#arg_name| {
@@ -619,14 +619,14 @@ fn parse_variadic_args_type(
                 for (elem, arg_name) in type_tuple.elems.iter().zip(arg_names.iter()) {
                     types.push(elem.clone());
                     type_assertions.push(quote! {
-                        static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#elem>);
+                        static_assertions::assert_impl_all!(crate::types::Expression: crate::macro_types::TryIntoExpression<#elem>);
                     });
                     args.push(quote! {
                         let #arg_name: #elem = #arg_name.clone().try_into_for(#fn_name)?;
                     })
                 }
                 Ok(quote! {{
-                    use crate::builtins_util::TryIntoExpression;
+                    use crate::macro_types::TryIntoExpression;
                     use std::convert::TryInto;
                     #(#type_assertions)*
                     #arg_check
@@ -786,14 +786,14 @@ fn parse_direct_type(
 
                 match passing_style {
                     PassingStyle::Value | PassingStyle::Reference => Ok(quote! {{
-                        use crate::types::RustProcedure;
+                        use crate::macro_types::RustProcedure;
                         let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
                             crate::types::TypedWrapper::new(&#arg_name);
                         #callback_declaration
                         typed_data.apply(#fn_name_ident, callback)
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
-                        use crate::types::RustProcedureRefMut;
+                        use crate::macro_types::RustProcedureRefMut;
                         let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
                             crate::types::TypedWrapper::new(&#arg_name);
                         #callback_declaration
@@ -883,64 +883,64 @@ fn embed_params_vec(params: &[Param]) -> TokenStream {
     for param in params {
         tokens.push(match (param.handle, param.passing_style) {
             (TypeHandle::Direct, PassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::MutReference
+                quote! { crate::macro_types::Param {
+                    handle: crate::macro_types::TypeHandle::Direct,
+                    passing_style: crate::macro_types::PassingStyle::MutReference
                 }}
             }
             (TypeHandle::Optional, PassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::MutReference
+                quote! { crate::macro_types::Param {
+                    handle: crate::macro_types::TypeHandle::Optional,
+                    passing_style: crate::macro_types::PassingStyle::MutReference
                 }}
             }
             (TypeHandle::VarArgs, PassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::MutReference
+                quote! { crate::macro_types::Param {
+                    handle: crate::macro_types::TypeHandle::VarArgs,
+                    passing_style: crate::macro_types::PassingStyle::MutReference
                 }}
             }
             (TypeHandle::Direct, PassingStyle::Reference) => {
-                quote! {crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::Reference
+                quote! {crate::macro_types::Param {
+                    handle: crate::macro_types::TypeHandle::Direct,
+                    passing_style: crate::macro_types::PassingStyle::Reference
                 }}
             }
             (TypeHandle::Optional, PassingStyle::Reference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::Reference
+                quote! { crate::macro_types::Param {
+                    handle: crate::macro_types::TypeHandle::Optional,
+                    passing_style: crate::macro_types::PassingStyle::Reference
                 }}
             }
             (TypeHandle::VarArgs, PassingStyle::Reference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::Reference
+                quote! { crate::macro_types::Param {
+                    handle: crate::macro_types::TypeHandle::VarArgs,
+                    passing_style: crate::macro_types::PassingStyle::Reference
                 }}
             }
             (TypeHandle::Direct, PassingStyle::Value) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::Value
+                quote! { crate::macro_types::Param {
+                    handle: crate::macro_types::TypeHandle::Direct,
+                    passing_style: crate::macro_types::PassingStyle::Value
                 }}
             }
             (TypeHandle::Optional, PassingStyle::Value) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::Value
+                quote! { crate::macro_types::Param {
+                    handle: crate::macro_types::TypeHandle::Optional,
+                    passing_style: crate::macro_types::PassingStyle::Value
                 }}
             }
             (TypeHandle::VarArgs, PassingStyle::Value) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::Value
+                quote! { crate::macro_types::Param {
+                    handle: crate::macro_types::TypeHandle::VarArgs,
+                    passing_style: crate::macro_types::PassingStyle::Value
                 }}
             }
         });
     }
     let const_params_len = get_const_params_len_ident();
     quote! {
-        let arg_types: [crate::builtins_util::Param; #const_params_len] = [ #(#tokens),* ];
+        let arg_types: [crate::macro_types::Param; #const_params_len] = [ #(#tokens),* ];
     }
 }
 
@@ -1628,9 +1628,11 @@ pub fn sl_sh_fn(
 
 //TODO
 //  - functions that return Values, tuple return types?
-//  - fcns that accept iters?
+//  - fcns that accept iterators or slices?
 //  - then... compare against inline the function being called... randomize variable names...
 //      and fn names too? could pick some random string and prefix all generated idents.
+//  - &mut lifetimes for destrucive forms so we can manipulate data directly, e.g.:
+// str-push!, annoying to have to accept Expression in order to return same Expression.
 
 #[cfg(test)]
 mod test {
