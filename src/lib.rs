@@ -148,9 +148,9 @@ fn opt_is_valid_generic_type<'a>(
     None
 }
 
-fn is_valid_generic_type<'a>(
+fn is_valid_generic_type(
     type_path: &TypePath,
-    possible_types: &'a [&str],
+    possible_types: &[&str],
 ) -> MacroResult<SupportedGenericReturnTypes> {
     if type_path.path.segments.len() == 1 && type_path.path.segments.first().is_some() {
         let path_segment = &type_path.path.segments.first().unwrap();
@@ -168,8 +168,7 @@ fn is_valid_generic_type<'a>(
     Err(Error::new(
             type_path.span(),
             format!(
-                "Functions of with generic arguments of type {:?} must contain Types, see GenericArgument.",
-                possible_types
+                "Functions of with generic arguments of type {possible_types:?} must contain Types, see GenericArgument."
             ),
         ))
 }
@@ -653,8 +652,7 @@ fn parse_variadic_args_type(
             } else {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let err_str = format!(
-                    "Error with argument at position {}, sl_sh_fn only supports tuple pairs.",
-                    arg_pos
+                    "Error with argument at position {arg_pos}, sl_sh_fn only supports tuple pairs."
                 );
                 Err(Error::new(type_tuple.span(), err_str))
             }
@@ -815,8 +813,7 @@ fn parse_direct_type(
             RustType::BareFn(_, _) | RustType::Reference(_, _) | RustType::Unsupported(_) => {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let err_str = format!(
-                    "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
-                    arg_pos
+                    "Error with argument at position {arg_pos}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))"
                 );
                 Err(Error::new(ty.span(), err_str))
             }
@@ -1219,8 +1216,7 @@ fn parse_fn_arg_type(
             RustType::BareFn(_, _) | RustType::Unsupported(_) | RustType::Reference(_, _) => {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let err_str = format!(
-                    "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
-                    arg_pos
+                    "Error with argument at position {arg_pos}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))"
                 );
                 Err(Error::new(ty.span(), err_str))
             }
@@ -1228,8 +1224,7 @@ fn parse_fn_arg_type(
         RustType::BareFn(_, _) | RustType::Unsupported(_) => {
             let arg_pos = get_arg_pos(arg_name)?;
             let err_str = format!(
-                "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
-                arg_pos
+                "Error with argument at position {arg_pos}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))"
             );
             Err(Error::new(ty.span(), err_str))
         }
