@@ -1627,7 +1627,8 @@ pub fn sl_sh_fn(
 //  - then... compare against inline the function being called... randomize variable names...
 //      and fn names too? could pick some random string and prefix all generated idents.
 //  - &mut lifetimes for destrucive forms so we can manipulate data directly, e.g.:
-// str-push!, annoying to have to accept Expression in order to return same Expression.
+// str-push!, str-clear!, annoying to have to accept Expression in order to return same Expression.
+// - lambdas?
 
 #[cfg(test)]
 mod test {
