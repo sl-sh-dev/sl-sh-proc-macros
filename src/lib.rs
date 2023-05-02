@@ -1,3 +1,8 @@
+mod dialect;
+
+use crate::dialect::sl_sh::SlSh;
+use crate::dialect::slosh::Slosh;
+use crate::dialect::Dialect;
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;
@@ -9,6 +14,7 @@ use syn::{
     Lit, Meta, NestedMeta, PathArguments, ReturnType, Type, TypeBareFn, TypePath, TypeReference,
     TypeTuple,
 };
+
 extern crate static_assertions;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -122,7 +128,7 @@ fn get_return_type(
             _ => Err(Error::new(
                 original_item_fn.span(),
                 format!(
-                    "sl_sh_fn macros can only return generic arguments of types {:?}.",
+                    "macro macros can only return generic arguments of types {:?}.",
                     &POSSIBLE_RETURN_TYPES
                 ),
             )),
@@ -210,7 +216,7 @@ fn get_attribute_value_with_key(
     if values.is_empty() {
         Err(Error::new(
             original_item_fn.span(),
-            "sl_sh_fn requires at least one name-value pair, 'fn_name = \"<name-of-sl-sh-fun>\"'.",
+            "macro requires at least one name-value pair, 'fn_name = \"<name-of-fun>\"'.",
         ))
     } else {
         for name_value in values {
@@ -230,7 +236,7 @@ fn get_bool_attribute_value_with_key(
     if values.is_empty() {
         Err(Error::new(
             original_item_fn.span(),
-            "sl_sh_fn requires at least one name-value pair, 'fn_name = \"<name-of-sl-sh-fun>\"'.",
+            "macro requires at least one name-value pair, 'fn_name = \"<name-of-fun>\"'.",
         ))
     } else {
         for name_value in values {
@@ -257,18 +263,18 @@ fn get_attribute_name_value(nested_meta: &NestedMeta) -> MacroResult<(String, St
                     }
                     (_, _) => Err(Error::new(
                         meta.span(),
-                        "sl_sh_fn requires one name-value pair, 'fn_name'. Supports optional name-value pair 'eval_values = true')",
+                        "macro requires one name-value pair, 'fn_name'. Supports optional name-value pair 'eval_values = true')",
                     )),
                 }
             }
             other => Err(Error::new(
                 other.span(),
-                "sl_sh_fn only supports one name-value pair attribute argument, 'fn_name'.",
+                "macro only supports one name-value pair attribute argument, 'fn_name'.",
             )),
         },
         other => Err(Error::new(
             other.span(),
-            "sl_sh_fn only supports one name-value pair attribute argument, 'fn_name'.",
+            "macro only supports one name-value pair attribute argument, 'fn_name'.",
         )),
     }
 }
@@ -311,7 +317,7 @@ fn parse_param(
             quote! {
                 let param = arg_types[#idx];
                 match param.handle {
-                    crate::builtins_util::TypeHandle::Direct => match args.get(#idx) {
+                    crate::macro_types::TypeHandle::Direct => match args.get(#idx) {
                         None => {
                             return Err(crate::types::LispError::new(format!(
                                 "{} not given enough arguments, expected at least {} arguments, got {}.",
@@ -338,7 +344,7 @@ fn parse_param(
                 let param = arg_types[#idx];
                 let arg = args.get(#idx);
                 match param.handle {
-                    crate::builtins_util::TypeHandle::Optional => {
+                    crate::macro_types::TypeHandle::Optional => {
                         let #arg_name = arg.map(|x| x.to_owned());
                         #inner
                     },
@@ -356,7 +362,7 @@ fn parse_param(
                 let param = arg_types[#idx];
                 let arg = args.get(#idx);
                 match param.handle {
-                    crate::builtins_util::TypeHandle::VarArgs => {
+                    crate::macro_types::TypeHandle::VarArgs => {
                         let #arg_name = args[#idx..].iter().map(|x| x.clone()).collect::<Vec<crate::types::Expression>>();
                         #inner
                     },
@@ -490,7 +496,7 @@ fn make_orig_fn_call(
     let const_params_len = get_const_params_len_ident();
     Ok(quote! {
         match args.get(#const_params_len) {
-            Some(_) if #const_params_len == 0 || arg_types[#const_params_len - 1].handle != crate::builtins_util::TypeHandle::VarArgs => {
+            Some(_) if #const_params_len == 0 || arg_types[#const_params_len - 1].handle != crate::macro_types::TypeHandle::VarArgs => {
                 return Err(crate::types::LispError::new(format!(
                     "{} given too many arguments, expected at least {} arguments, got {}.",
                     fn_name,
@@ -591,9 +597,9 @@ fn parse_variadic_args_type(
             };
             Ok(quote! {{
                 #arg_check
-                use crate::builtins_util::TryIntoExpression;
+                use crate::macro_types::TryIntoExpression;
 
-                static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#wrapped_ty>);
+                static_assertions::assert_impl_all!(crate::types::Expression: crate::macro_types::TryIntoExpression<#wrapped_ty>);
                 let #arg_name = #arg_name
                     .iter()
                     .map(|#arg_name| {
@@ -633,14 +639,14 @@ fn parse_variadic_args_type(
                 for (elem, arg_name) in type_tuple.elems.iter().zip(arg_names.iter()) {
                     types.push(elem.clone());
                     type_assertions.push(quote! {
-                        static_assertions::assert_impl_all!(crate::types::Expression: crate::builtins_util::TryIntoExpression<#elem>);
+                        static_assertions::assert_impl_all!(crate::types::Expression: crate::macro_types::TryIntoExpression<#elem>);
                     });
                     args.push(quote! {
                         let #arg_name: #elem = #arg_name.clone().try_into_for(#fn_name)?;
                     })
                 }
                 Ok(quote! {{
-                    use crate::builtins_util::TryIntoExpression;
+                    use crate::macro_types::TryIntoExpression;
                     use std::convert::TryInto;
                     #(#type_assertions)*
                     #arg_check
@@ -667,7 +673,7 @@ fn parse_variadic_args_type(
             } else {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let err_str = format!(
-                    "Error with argument at position {}, sl_sh_fn only supports tuple pairs.",
+                    "Error with argument at position {}, macro only supports tuple pairs.",
                     arg_pos
                 );
                 Err(Error::new(type_tuple.span(), err_str))
@@ -800,14 +806,14 @@ fn parse_direct_type(
 
                 match passing_style {
                     PassingStyle::Value | PassingStyle::Reference => Ok(quote! {{
-                        use crate::types::RustProcedure;
+                        use crate::macro_types::RustProcedure;
                         let typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
                             crate::types::TypedWrapper::new(&#arg_name);
                         #callback_declaration
                         typed_data.apply(#fn_name_ident, callback)
                     }}),
                     PassingStyle::MutReference => Ok(quote! {{
-                        use crate::types::RustProcedureRefMut;
+                        use crate::macro_types::RustProcedureRefMut;
                         let mut typed_data: crate::types::TypedWrapper<#ty, crate::types::Expression> =
                             crate::types::TypedWrapper::new(&#arg_name);
                         #callback_declaration
@@ -829,7 +835,7 @@ fn parse_direct_type(
             RustType::BareFn(_, _) | RustType::Reference(_, _) | RustType::Unsupported(_) => {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let err_str = format!(
-                    "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
+                    "Error with argument at position {}, macro only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
                     arg_pos
                 );
                 Err(Error::new(ty.span(), err_str))
@@ -897,64 +903,64 @@ fn embed_params_vec(params: &[Param]) -> TokenStream {
     for param in params {
         tokens.push(match (param.handle, param.passing_style) {
             (TypeHandle::Direct, PassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::MutReference
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Direct,
+                    passing_style: crate::macro_types::PassingStyle::MutReference
                 }}
             }
             (TypeHandle::Optional, PassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::MutReference
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Optional,
+                    passing_style: crate::macro_types::PassingStyle::MutReference
                 }}
             }
             (TypeHandle::VarArgs, PassingStyle::MutReference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::MutReference
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::VarArgs,
+                    passing_style: crate::macro_types::PassingStyle::MutReference
                 }}
             }
             (TypeHandle::Direct, PassingStyle::Reference) => {
-                quote! {crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::Reference
+                quote! {crate::Param {
+                    handle: crate::macro_types::TypeHandle::Direct,
+                    passing_style: crate::macro_types::PassingStyle::Reference
                 }}
             }
             (TypeHandle::Optional, PassingStyle::Reference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::Reference
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Optional,
+                    passing_style: crate::macro_types::PassingStyle::Reference
                 }}
             }
             (TypeHandle::VarArgs, PassingStyle::Reference) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::Reference
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::VarArgs,
+                    passing_style: crate::macro_types::PassingStyle::Reference
                 }}
             }
             (TypeHandle::Direct, PassingStyle::Value) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Direct,
-                    passing_style: crate::builtins_util::PassingStyle::Value
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Direct,
+                    passing_style: crate::macro_types::PassingStyle::Value
                 }}
             }
             (TypeHandle::Optional, PassingStyle::Value) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::Optional,
-                    passing_style: crate::builtins_util::PassingStyle::Value
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Optional,
+                    passing_style: crate::macro_types::PassingStyle::Value
                 }}
             }
             (TypeHandle::VarArgs, PassingStyle::Value) => {
-                quote! { crate::builtins_util::Param {
-                    handle: crate::builtins_util::TypeHandle::VarArgs,
-                    passing_style: crate::builtins_util::PassingStyle::Value
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::VarArgs,
+                    passing_style: crate::macro_types::PassingStyle::Value
                 }}
             }
         });
     }
     let const_params_len = get_const_params_len_ident();
     quote! {
-        let arg_types: [crate::builtins_util::Param; #const_params_len] = [ #(#tokens),* ];
+        let arg_types: [crate::Param; #const_params_len] = [ #(#tokens),* ];
     }
 }
 
@@ -1103,7 +1109,7 @@ fn generate_builtin_fn(
     let inputs_less_env_len = original_item_fn.sig.inputs.len() - skip;
     if inputs_less_env_len != params.len() {
         let err_str = format!(
-            "sl_sh_fn macro is broken, signature of target function has an arity of {}, but this macro computed its arity as: {} (arity is - 1 if takes_env is true).",
+            "macro is broken, signature of target function has an arity of {}, but this macro computed its arity as: {} (arity is - 1 if takes_env is true).",
             inputs_less_env_len,
             params.len(),
         );
@@ -1233,7 +1239,7 @@ fn parse_fn_arg_type(
             RustType::BareFn(_, _) | RustType::Unsupported(_) | RustType::Reference(_, _) => {
                 let arg_pos = get_arg_pos(arg_name)?;
                 let err_str = format!(
-                    "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
+                    "Error with argument at position {}, macro only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
                     arg_pos
                 );
                 Err(Error::new(ty.span(), err_str))
@@ -1242,7 +1248,7 @@ fn parse_fn_arg_type(
         RustType::BareFn(_, _) | RustType::Unsupported(_) => {
             let arg_pos = get_arg_pos(arg_name)?;
             let err_str = format!(
-                "Error with argument at position {}, sl_sh_fn only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
+                "Error with argument at position {}, macro only supports Vec<T>, Option<T>, and T where T is a Type::Path or Type::Tuple and can be moved, passed by reference, or passed by mutable reference (|&|&mut )(Type Path | (Type Path,*))",
                 arg_pos
             );
             Err(Error::new(ty.span(), err_str))
@@ -1333,11 +1339,15 @@ fn parse_type_tuple(
 
 /// Optional and VarArgs types are supported to create the idea of items that might be provided or
 /// for providing a list of zero or more items that can be passed in.
-/// The nature of optional and varargs are context dependent because variable numbers of
-/// arguments have to be at the end of the function signature. This method verifies that items
-/// marked as Optional are last, and VarArgs is supported but only in the last position, which can
-/// be after any number of Optional arguments. This means non Optional/VarArgs types must
-/// come before all Optional and VarArgs types.
+///
+/// The nature of varargs and optional parameters are context dependent because variable numbers of
+/// arguments (VarArgs) are singletons that have to be at the end of the function signature, and
+/// optional arguments (Optional) must appear after non-optional ones.
+///
+/// Formally this method verifies that parameters marked as Optional are last, and one VarArgs parameter
+/// is supported but only in the last position, which can be after zero or more Optional arguments.
+/// This means non Optional/VarArgs types must come before all Optional and VarArgs types and all
+/// Optional types must come before one VarArgs type.
 fn are_args_valid(original_item_fn: &ItemFn, params: &[Param], takes_env: bool) -> MacroResult<()> {
     if params.is_empty() || (!takes_env && params.len() == 1 || takes_env && params.len() == 2) {
         Ok(())
@@ -1407,7 +1417,7 @@ fn get_param_from_type(ty: Type, span: Span, pos: usize) -> MacroResult<Param> {
                     return Err(Error::new(
                         span,
                         format!(
-                            "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
+                            "Error with argument at position {}, macro only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
                             pos,
                             ty_clone.to_token_stream(),
                         ),
@@ -1419,7 +1429,7 @@ fn get_param_from_type(ty: Type, span: Span, pos: usize) -> MacroResult<Param> {
             return Err(Error::new(
                 span,
                 format!(
-                    "Error with argument at position {}, sl_sh_fn only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
+                    "Error with argument at position {}, macro only supports passing Type::Path and Type::Tuple by value or ref/ref mut, no either syn::Type's are supported: {:?}.",
                     pos,
                     ty_clone.to_token_stream(),
                 ),
@@ -1529,7 +1539,7 @@ fn parse_attributes(
         .ok_or_else(|| {
             Error::new(
                 original_item_fn.span(),
-                "sl_sh_fn requires name-value pair, 'fn_name'",
+                "macro requires name-value pair, 'fn_name'",
             )
         })?;
     let fn_name_ident = Ident::new(&fn_name_ident, Span::call_site());
@@ -1604,12 +1614,8 @@ fn generate_sl_sh_fn(
     Ok(tokens)
 }
 
-/// macro that creates a bridge between rust native code and sl-sh code, specify the lisp
-/// function name to be interned with the "fn_name" attribute. This macro outputs all of the
-/// generated bridge code as well as the original function's code so it can be used
-/// by the generated bridge code.
-#[proc_macro_attribute]
-pub fn sl_sh_fn(
+fn generate_macro_code<T: Dialect>(
+    _dialect: T,
     attr: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
@@ -1637,6 +1643,30 @@ pub fn sl_sh_fn(
     };
 
     proc_macro::TokenStream::from(tokens)
+}
+
+/// Macro that creates a bridge between rust native code and sl-sh code. Specify the lisp
+/// function name to be interned with the "fn_name" attribute. This macro outputs all of the
+/// generated bridge code as well as the original function's code so it can be used
+/// by the generated bridge code.
+#[proc_macro_attribute]
+pub fn sl_sh_fn(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    generate_macro_code(SlSh {}, attr, input)
+}
+
+/// Macro that creates a bridge between rust native code and slosh code. Specify the lisp
+/// function name to be interned with the "fn_name" attribute. This macro outputs all of the
+/// generated bridge code as well as the original function's code so it can be used
+/// by the generated bridge code.
+#[proc_macro_attribute]
+pub fn sl_vm_fn(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    generate_macro_code(Slosh {}, attr, input)
 }
 
 //TODO
