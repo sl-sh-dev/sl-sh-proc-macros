@@ -428,168 +428,6 @@ fn get_type_or_wrapped_type<'a>(ty: &'a TypePath, possible_types: &'a [&str]) ->
     RustType::Path(ty.clone(), ty.span())
 }
 
-/// create a vec literal of the expected Param types so code can check its arguments at runtime for
-/// API arity/type correctness.
-fn embed_params_vec(params: &[Param]) -> TokenStream {
-    let mut tokens = vec![];
-    for param in params {
-        tokens.push(match (param.handle, param.passing_style) {
-            (TypeHandle::Direct, PassingStyle::MutReference) => {
-                quote! { crate::Param {
-                    handle: crate::macro_types::TypeHandle::Direct,
-                    passing_style: crate::macro_types::PassingStyle::MutReference
-                }}
-            }
-            (TypeHandle::Optional, PassingStyle::MutReference) => {
-                quote! { crate::Param {
-                    handle: crate::macro_types::TypeHandle::Optional,
-                    passing_style: crate::macro_types::PassingStyle::MutReference
-                }}
-            }
-            (TypeHandle::VarArgs, PassingStyle::MutReference) => {
-                quote! { crate::Param {
-                    handle: crate::macro_types::TypeHandle::VarArgs,
-                    passing_style: crate::macro_types::PassingStyle::MutReference
-                }}
-            }
-            (TypeHandle::Direct, PassingStyle::Reference) => {
-                quote! {crate::Param {
-                    handle: crate::macro_types::TypeHandle::Direct,
-                    passing_style: crate::macro_types::PassingStyle::Reference
-                }}
-            }
-            (TypeHandle::Optional, PassingStyle::Reference) => {
-                quote! { crate::Param {
-                    handle: crate::macro_types::TypeHandle::Optional,
-                    passing_style: crate::macro_types::PassingStyle::Reference
-                }}
-            }
-            (TypeHandle::VarArgs, PassingStyle::Reference) => {
-                quote! { crate::Param {
-                    handle: crate::macro_types::TypeHandle::VarArgs,
-                    passing_style: crate::macro_types::PassingStyle::Reference
-                }}
-            }
-            (TypeHandle::Direct, PassingStyle::Value) => {
-                quote! { crate::Param {
-                    handle: crate::macro_types::TypeHandle::Direct,
-                    passing_style: crate::macro_types::PassingStyle::Value
-                }}
-            }
-            (TypeHandle::Optional, PassingStyle::Value) => {
-                quote! { crate::Param {
-                    handle: crate::macro_types::TypeHandle::Optional,
-                    passing_style: crate::macro_types::PassingStyle::Value
-                }}
-            }
-            (TypeHandle::VarArgs, PassingStyle::Value) => {
-                quote! { crate::Param {
-                    handle: crate::macro_types::TypeHandle::VarArgs,
-                    passing_style: crate::macro_types::PassingStyle::Value
-                }}
-            }
-        });
-    }
-    let const_params_len = get_const_params_len_ident();
-    quote! {
-        let arg_types: [crate::Param; #const_params_len] = [ #(#tokens),* ];
-    }
-}
-
-/// write the intern_ function code. This code is generated to be called within sl-sh to avoid writing
-/// boilerplate code to submit a function symbol and the associated code to the runtime. Every builtin
-/// function must be inserted into a hashmap where the key is the name of the function and the value
-/// is a function expression that stores the name of the rust function to call and its documentation.
-/// It looks like the following in all cases:
-// ```
-// fn intern_one_int_to_float<S: std::hash::BuildHasher>(
-//    interner: &mut sl_sh::Interner,
-//    data: &mut std::collections::HashMap<&'static str, (sl_sh::types::Expression, String), S>,
-//) {
-//    let fn_name = "oneintofloat";
-//    data.insert(
-//        interner.intern(fn_name),
-//        sl_sh::types::Expression::make_function(parse_one_int_to_float, " my docs\n"),
-//    );
-//}
-// ```
-fn generate_intern_fn(
-    original_fn_name_str: &str,
-    fn_name_ident: &Ident,
-    fn_name: &str,
-    doc_comments: String,
-) -> TokenStream {
-    let parse_name = get_parse_fn_name(original_fn_name_str);
-    let intern_name = get_intern_fn_name(original_fn_name_str);
-    quote! {
-        fn #intern_name<S: std::hash::BuildHasher>(
-            interner: &mut crate::Interner,
-            data: &mut std::collections::HashMap<&'static str, (crate::types::Expression, String), S>,
-        ) {
-            let #fn_name_ident = #fn_name;
-            data.insert(
-                interner.intern(#fn_name_ident),
-                crate::types::Expression::make_function(#parse_name, #doc_comments),
-            );
-        }
-    }
-}
-
-/// write the parse_ version of the provided function. The function it generates takes an environment
-/// and a list of Expressions, evaluates those expressions and then maps the provided list of expressions
-/// to a list of ArgType values. To accomplish this information from compile time, arg_types,
-/// is manually inserted into this function. This way the evaluated list of args and the expected
-/// list of args can be compared and the appropriate vector of arguments can be created and
-/// passed to the builtin function. To map a vector of ArgType structs to an actual function
-/// call the ExpandVecToArgs trait is used. A sample parse_ function for a function that takes
-/// one argument is shown below.
-fn generate_parse_fn(
-    original_fn_name_str: &str,
-    eval_values: bool,
-    fn_name_ident: &Ident,
-    fn_name: &str,
-    args_len: usize,
-    params: &[Param],
-    inner: TokenStream,
-) -> TokenStream {
-    let parse_name = get_parse_fn_name(original_fn_name_str);
-    let arg_vec_literal = embed_params_vec(params);
-
-    // in slosh this will change because the args are already evaluated and the macro will
-    // be dealing with a slice so... keep this allocation at runtime for now because it
-    // simplified the implementation and is more realistic long-term even though it's
-    // suboptimal in this case.
-    let make_args = if eval_values {
-        quote! {
-            let args = crate::builtins_util::make_args(environment, args)?;
-            let args = args.into_iter().collect::<Vec<Expression>>();
-            let args = args.as_slice();
-
-        }
-    } else {
-        quote! {
-            let args = crate::builtins_util::make_args_eval_no_values(environment, args)?;
-            let args = args.into_iter().collect::<Vec<Expression>>();
-            let args = args.as_slice();
-        }
-    };
-
-    let const_params_len = get_const_params_len_ident();
-    quote! {
-        fn #parse_name(
-            environment: &mut crate::environment::Environment,
-            args: &mut dyn Iterator<Item = crate::types::Expression>,
-        ) -> crate::LispResult<crate::types::Expression> {
-            #make_args
-            let #fn_name_ident = #fn_name;
-            const #const_params_len: usize = #args_len;
-            #arg_vec_literal
-
-            #inner
-        }
-    }
-}
-
 fn num_required_args(params: &[Param]) -> usize {
     params.iter().fold(0, |accum, nxt| {
         if nxt.handle == TypeHandle::Direct {
@@ -854,7 +692,7 @@ fn generate_sl_sh_fn<T: Dialect>(
     } else {
         original_item_fn.sig.inputs.len()
     };
-    let parse_fn = generate_parse_fn(
+    let parse_fn = dialect.generate_parse_fn(
         original_fn_name_str,
         eval_values,
         &fn_name_ident,
@@ -864,7 +702,7 @@ fn generate_sl_sh_fn<T: Dialect>(
         builtin_fn,
     );
     let doc_comments = get_documentation_for_fn(original_item_fn)?;
-    let intern_fn = generate_intern_fn(
+    let intern_fn = dialect.generate_intern_fn(
         original_fn_name_str,
         &fn_name_ident,
         fn_name.as_str(),
