@@ -16,6 +16,8 @@ use syn::{
 
 extern crate static_assertions;
 
+type ParamParsingFn = fn(Box<dyn Dialect>, &Ident, TokenStream, Param, usize, usize) -> TokenStream;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum TypeHandle {
     Direct,
@@ -265,7 +267,15 @@ fn get_type_handle(type_path: &TypePath) -> TypeHandle {
     TypeHandle::Direct
 }
 
+fn get_parser_for_type_handle(noop_outer_parse: bool) -> ParamParsingFn {
+    match noop_outer_parse {
+        true => no_parse_param,
+        false => parse_param,
+    }
+}
+
 fn no_parse_param(
+    _dialect: Box<dyn Dialect>,
     _arg_name: &Ident,
     inner: TokenStream,
     _param: Param,
@@ -276,6 +286,7 @@ fn no_parse_param(
 }
 
 fn parse_param(
+    _dialect: Box<dyn Dialect>,
     arg_name: &Ident,
     inner: TokenStream,
     param: Param,
@@ -345,15 +356,6 @@ fn parse_param(
                 }
             }
         }
-    }
-}
-
-fn get_parser_for_type_handle(
-    noop_outer_parse: bool,
-) -> fn(&Ident, TokenStream, Param, usize, usize) -> TokenStream {
-    match noop_outer_parse {
-        true => no_parse_param,
-        false => parse_param,
     }
 }
 

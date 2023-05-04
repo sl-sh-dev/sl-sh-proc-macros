@@ -3,7 +3,7 @@ use crate::{
     generate_inner_fn_signature_to_orig_fn_call, get_arg_pos, get_generic_argument_from_type,
     get_param_from_type, get_parser_for_type_handle, get_type_or_wrapped_type,
     is_valid_generic_type, is_vec, no_parse_param, num_required_args,
-    tokens_for_matching_references, MacroResult, Param, PassingStyle, RustType,
+    tokens_for_matching_references, MacroResult, Param, ParamParsingFn, PassingStyle, RustType,
     SupportedGenericReturnTypes, TypeHandle, POSSIBLE_ARG_TYPES, POSSIBLE_RETURN_TYPES,
     SPECIAL_ARG_TYPES,
 };
@@ -19,7 +19,10 @@ pub mod slosh;
 
 //TODO make functions static that do not rely on self parameter!
 pub(crate) trait Dialect {
-    /// write the builtin_ version of the provided function. This function is the function taht makes
+    /// Return the backing dialect of the trait.
+    fn dialect(&self) -> Box<dyn Dialect>;
+
+    /// write the builtin_ version of the provided function. This function is the function that makes
     /// a direct call to the original rust native function to which the macro was applied. To accomplish
     /// this the builtin_ function generates takes some number of ArgType structs (the wrapper enum that
     /// enables passing optional and varargs). the body of the function handles unwrapping the ArgType
@@ -498,7 +501,7 @@ pub(crate) trait Dialect {
         passing_style: PassingStyle,
         idx: usize,
         required_args: usize,
-        outer_parse: fn(&Ident, TokenStream, Param, usize, usize) -> TokenStream,
+        outer_parse: ParamParsingFn,
     ) -> MacroResult<TokenStream> {
         let tokens = match param.handle {
             TypeHandle::Direct => self.parse_direct_type(
@@ -532,7 +535,14 @@ pub(crate) trait Dialect {
                 quote! { crate::VarArgs },
             )?,
         };
-        Ok(outer_parse(arg_name, tokens, param, required_args, idx))
+        Ok(outer_parse(
+            self.dialect(),
+            arg_name,
+            tokens,
+            param,
+            required_args,
+            idx,
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -546,7 +556,7 @@ pub(crate) trait Dialect {
         idx: usize,
         required_args: usize,
         param: Param,
-        outer_parse: fn(&Ident, TokenStream, Param, usize, usize) -> TokenStream,
+        outer_parse: ParamParsingFn,
     ) -> MacroResult<TokenStream> {
         // at the end of all the tuple parsing the inner token stream expects
         // arg_name to be:
@@ -614,7 +624,14 @@ pub(crate) trait Dialect {
                 }
             }
         }};
-        Ok(outer_parse(arg_name, tokens, param, required_args, idx))
+        Ok(outer_parse(
+            self.dialect(),
+            arg_name,
+            tokens,
+            param,
+            required_args,
+            idx,
+        ))
     }
 
     /// generate an (optionally inlined) call to the original fn with the names of all of the variables,
