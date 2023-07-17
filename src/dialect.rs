@@ -1,5 +1,5 @@
 use crate::{
-    generate_assertions_code_for_return_type_conversions,
+    embed_params_vec, generate_assertions_code_for_return_type_conversions,
     generate_inner_fn_signature_to_orig_fn_call, get_arg_pos, get_const_params_len_ident,
     get_generic_argument_from_type, get_intern_fn_name, get_param_from_type, get_parse_fn_name,
     get_parser_for_type_handle, get_type_or_wrapped_type, is_valid_generic_type, is_vec,
@@ -133,7 +133,7 @@ pub(crate) trait Dialect {
         inner: TokenStream,
     ) -> TokenStream {
         let parse_name = get_parse_fn_name(original_fn_name_str);
-        let arg_vec_literal = self.embed_params_vec(params);
+        let arg_vec_literal = embed_params_vec(params);
 
         // in slosh this will change because the args are already evaluated and the macro will
         // be dealing with a slice so... keep this allocation at runtime for now because it
@@ -207,74 +207,6 @@ pub(crate) trait Dialect {
                     crate::types::Expression::make_function(#parse_name, #doc_comments),
                 );
             }
-        }
-    }
-
-    /// create a vec literal of the expected Param types so code can check its arguments at runtime for
-    /// API arity/type correctness.
-    fn embed_params_vec(&self, params: &[Param]) -> TokenStream {
-        let mut tokens = vec![];
-        for param in params {
-            tokens.push(match (param.handle, param.passing_style) {
-                (TypeHandle::Direct, PassingStyle::MutReference) => {
-                    quote! { crate::Param {
-                        handle: crate::macro_types::TypeHandle::Direct,
-                        passing_style: crate::macro_types::PassingStyle::MutReference
-                    }}
-                }
-                (TypeHandle::Optional, PassingStyle::MutReference) => {
-                    quote! { crate::Param {
-                        handle: crate::macro_types::TypeHandle::Optional,
-                        passing_style: crate::macro_types::PassingStyle::MutReference
-                    }}
-                }
-                (TypeHandle::VarArgs, PassingStyle::MutReference) => {
-                    quote! { crate::Param {
-                        handle: crate::macro_types::TypeHandle::VarArgs,
-                        passing_style: crate::macro_types::PassingStyle::MutReference
-                    }}
-                }
-                (TypeHandle::Direct, PassingStyle::Reference) => {
-                    quote! {crate::Param {
-                        handle: crate::macro_types::TypeHandle::Direct,
-                        passing_style: crate::macro_types::PassingStyle::Reference
-                    }}
-                }
-                (TypeHandle::Optional, PassingStyle::Reference) => {
-                    quote! { crate::Param {
-                        handle: crate::macro_types::TypeHandle::Optional,
-                        passing_style: crate::macro_types::PassingStyle::Reference
-                    }}
-                }
-                (TypeHandle::VarArgs, PassingStyle::Reference) => {
-                    quote! { crate::Param {
-                        handle: crate::macro_types::TypeHandle::VarArgs,
-                        passing_style: crate::macro_types::PassingStyle::Reference
-                    }}
-                }
-                (TypeHandle::Direct, PassingStyle::Value) => {
-                    quote! { crate::Param {
-                        handle: crate::macro_types::TypeHandle::Direct,
-                        passing_style: crate::macro_types::PassingStyle::Value
-                    }}
-                }
-                (TypeHandle::Optional, PassingStyle::Value) => {
-                    quote! { crate::Param {
-                        handle: crate::macro_types::TypeHandle::Optional,
-                        passing_style: crate::macro_types::PassingStyle::Value
-                    }}
-                }
-                (TypeHandle::VarArgs, PassingStyle::Value) => {
-                    quote! { crate::Param {
-                        handle: crate::macro_types::TypeHandle::VarArgs,
-                        passing_style: crate::macro_types::PassingStyle::Value
-                    }}
-                }
-            });
-        }
-        let const_params_len = get_const_params_len_ident();
-        quote! {
-            let arg_types: [crate::Param; #const_params_len] = [ #(#tokens),* ];
         }
     }
 

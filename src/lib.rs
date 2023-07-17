@@ -359,6 +359,74 @@ fn parse_param(
     }
 }
 
+/// create a vec literal of the expected Param types so code can check its arguments at runtime for
+/// API arity/type correctness.
+fn embed_params_vec(params: &[Param]) -> TokenStream {
+    let mut tokens = vec![];
+    for param in params {
+        tokens.push(match (param.handle, param.passing_style) {
+            (TypeHandle::Direct, PassingStyle::MutReference) => {
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Direct,
+                    passing_style: crate::macro_types::PassingStyle::MutReference
+                }}
+            }
+            (TypeHandle::Optional, PassingStyle::MutReference) => {
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Optional,
+                    passing_style: crate::macro_types::PassingStyle::MutReference
+                }}
+            }
+            (TypeHandle::VarArgs, PassingStyle::MutReference) => {
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::VarArgs,
+                    passing_style: crate::macro_types::PassingStyle::MutReference
+                }}
+            }
+            (TypeHandle::Direct, PassingStyle::Reference) => {
+                quote! {crate::Param {
+                    handle: crate::macro_types::TypeHandle::Direct,
+                    passing_style: crate::macro_types::PassingStyle::Reference
+                }}
+            }
+            (TypeHandle::Optional, PassingStyle::Reference) => {
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Optional,
+                    passing_style: crate::macro_types::PassingStyle::Reference
+                }}
+            }
+            (TypeHandle::VarArgs, PassingStyle::Reference) => {
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::VarArgs,
+                    passing_style: crate::macro_types::PassingStyle::Reference
+                }}
+            }
+            (TypeHandle::Direct, PassingStyle::Value) => {
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Direct,
+                    passing_style: crate::macro_types::PassingStyle::Value
+                }}
+            }
+            (TypeHandle::Optional, PassingStyle::Value) => {
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::Optional,
+                    passing_style: crate::macro_types::PassingStyle::Value
+                }}
+            }
+            (TypeHandle::VarArgs, PassingStyle::Value) => {
+                quote! { crate::Param {
+                    handle: crate::macro_types::TypeHandle::VarArgs,
+                    passing_style: crate::macro_types::PassingStyle::Value
+                }}
+            }
+        });
+    }
+    let const_params_len = get_const_params_len_ident();
+    quote! {
+        let arg_types: [crate::Param; #const_params_len] = [ #(#tokens),* ];
+    }
+}
+
 /// create two lists that can be joined by macro syntax to create the inner part of a function
 /// signature, e.g. (arg_0: a_type, arg_1: b_type, ...) in some existing rust function:
 /// fn myfn(arg_0: a_type, arg_1: b_type, ...) { ... }
