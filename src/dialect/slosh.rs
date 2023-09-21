@@ -1,9 +1,23 @@
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, DialectWrapper, GetItemFn};
+use std::marker::PhantomData;
 
-pub struct Slosh {}
+pub struct Slosh<T: ?Sized> {
+    phantom: Option<PhantomData<T>>,
+}
 
-impl Dialect for Slosh {
-    fn dialect(&self) -> Box<dyn Dialect> {
-        Box::new(Slosh {})
+impl<T: ?Sized> Slosh<T> {
+    pub fn new() -> Self {
+        Self { phantom: None }
+    }
+}
+
+impl<T> Dialect for Slosh<T>
+where
+    T: Dialect,
+{
+    type OriginalItemFn = dyn GetItemFn;
+
+    fn dialect(&self) -> Box<dyn Dialect<OriginalItemFn = dyn GetItemFn>> {
+        Box::new(Slosh { phantom: None })
     }
 }

@@ -2,7 +2,7 @@ mod dialect;
 
 use crate::dialect::sl_sh::SlSh;
 use crate::dialect::slosh::Slosh;
-use crate::dialect::Dialect;
+use crate::dialect::{Dialect, GetItemFn};
 use quote::quote;
 use quote::ToTokens;
 use quote::__private::TokenStream;
@@ -16,7 +16,14 @@ use syn::{
 
 extern crate static_assertions;
 
-type ParamParsingFn = fn(Box<dyn Dialect>, &Ident, TokenStream, Param, usize, usize) -> TokenStream;
+type ParamParsingFn = fn(
+    Box<dyn Dialect<OriginalItemFn = dyn GetItemFn>>,
+    &Ident,
+    TokenStream,
+    Param,
+    usize,
+    usize,
+) -> TokenStream;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum TypeHandle {
@@ -275,7 +282,7 @@ fn get_parser_for_type_handle(noop_outer_parse: bool) -> ParamParsingFn {
 }
 
 fn no_parse_param(
-    _dialect: Box<dyn Dialect>,
+    _dialect: Box<dyn Dialect<OriginalItemFn = dyn GetItemFn>>,
     _arg_name: &Ident,
     inner: TokenStream,
     _param: Param,
@@ -286,7 +293,7 @@ fn no_parse_param(
 }
 
 fn parse_param(
-    _dialect: Box<dyn Dialect>,
+    _dialect: Box<dyn Dialect<OriginalItemFn = dyn GetItemFn>>,
     arg_name: &Ident,
     inner: TokenStream,
     param: Param,
@@ -824,7 +831,11 @@ pub fn sl_sh_fn(
     attr: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    generate_macro_code(SlSh {}, attr, input)
+    generate_macro_code(
+        SlSh::<dyn Dialect<OriginalItemFn = dyn GetItemFn>>::new(),
+        attr,
+        input,
+    )
 }
 
 /// Macro that creates a bridge between rust native code and slosh code. Specify the lisp
@@ -836,7 +847,11 @@ pub fn sl_vm_fn(
     attr: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    generate_macro_code(Slosh {}, attr, input)
+    generate_macro_code(
+        Slosh::<dyn Dialect<OriginalItemFn = dyn GetItemFn>>::new(),
+        attr,
+        input,
+    )
 }
 
 //TODO

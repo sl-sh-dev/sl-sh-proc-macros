@@ -17,10 +17,41 @@ use syn::{Error, FnArg, GenericArgument, Ident, ItemFn, ReturnType, Type, TypePa
 pub mod sl_sh;
 pub mod slosh;
 
+pub(super) trait GetItemFn {
+    fn get_item_fn(&self) -> &ItemFn;
+}
+
+pub(super) struct DialectWrapper<T: Dialect> {
+    item_fn: T::OriginalItemFn,
+}
+
+impl<T> GetItemFn for DialectWrapper<T>
+where
+    T: Dialect,
+{
+    fn get_item_fn(&self) -> &ItemFn {
+        self.item_fn.get_item_fn()
+    }
+}
+
+pub(super) struct MyItemFn(ItemFn);
+
+impl GetItemFn for MyItemFn {
+    fn get_item_fn(&self) -> &ItemFn {
+        self.0
+    }
+}
+
+impl<T> DialectWrapper<T> where T: Dialect + GetItemFn {}
+
 //TODO make functions static that do not rely on self parameter!
-pub(crate) trait Dialect {
+pub(crate) trait Dialect
+where
+    Self::OriginalItemFn: GetItemFn,
+{
+    type OriginalItemFn;
     /// Return the backing dialect of the trait.
-    fn dialect(&self) -> Box<dyn Dialect>;
+    fn dialect(&self) -> Box<dyn Dialect<OriginalItemFn = dyn GetItemFn>>;
 
     /// write the builtin_ version of the provided function. This function is the function that makes
     /// a direct call to the original rust native function to which the macro was applied. To accomplish
