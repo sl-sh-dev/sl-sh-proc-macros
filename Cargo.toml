@@ -11,3 +11,4 @@ proc-macro = true
 syn = { version = "1.0.95", features = ["full"] }
 quote = "1.0.18"
 static_assertions = "1.1.0"
+trybuild = "1.0.85" # TODO PC need to use this to test error messages! e.g. what error is thrown when a type doesn't have the appropriate type conversion traits implemented.
