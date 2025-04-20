@@ -1,3 +1,5 @@
+DEPRECATED AS THIS REPO HAS BEEN MERGED INTO [SL-SH](https://github.com/sl-sh-dev/sl-sh)
+
 sl-sh proc macro attributes to eliminate need for boilerplate in creating builtin functions
 
 Notes
